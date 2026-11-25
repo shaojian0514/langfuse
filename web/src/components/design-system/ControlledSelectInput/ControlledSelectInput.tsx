@@ -1,18 +1,229 @@
 "use client";
 
 import * as React from "react";
+import { Command, defaultFilter } from "cmdk";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
-import { Command } from "cmdk";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
+import { X } from "@langfuse/icons";
 
+import { SelectDropdown } from "../SelectDropdown/SelectDropdown";
+import { DropdownIndicator } from "../DropdownIndicator/DropdownIndicator";
+import { InputControl } from "../internal/InputControl/InputControl";
+import { InputDropdown } from "../internal/InputDropdown/InputDropdown";
 import { useLayerContainer } from "@/src/context/LayerContext/LayerContext";
 import { stopScrollPropagation } from "@/src/hooks/stopScrollPropagation";
 import { cn } from "@/src/utils/tailwind";
 import { assertUnreachable } from "@/src/utils/types";
-import { type SelectDropdown } from "../SelectDropdown/SelectDropdown";
-import { InputControl } from "../internal/InputControl/InputControl";
-import { InputDropdown } from "../internal/InputDropdown/InputDropdown";
-import { DropdownIndicator } from "../DropdownIndicator/DropdownIndicator";
+
+export type LocalSelectInputProps<V extends string> = Pick<
+  React.ComponentProps<typeof SelectDropdown<V>>,
+  | "value"
+  | "options"
+  | "onValueChange"
+  | "emptyMessage"
+  | "id"
+  | "aria-describedby"
+  | "aria-invalid"
+  | "aria-label"
+  | "disabled"
+  | "onBlur"
+  | "openState"
+> & {
+  prefix?: React.ComponentProps<typeof InputControl>["prefix"];
+  clearAction?: { label: string; onClear: () => void };
+  placeholder: string;
+  search?: React.ComponentProps<typeof SearchableSelectInput<V>>["search"];
+  /** Popup alignment for searchable selects. */
+  align?: React.ComponentProps<typeof SearchableSelectInput<V>>["align"];
+  dropdownWidth?: React.ComponentProps<
+    typeof SearchableSelectInput<V>
+  >["dropdownWidth"];
+  /** Keeps the portaled option list out of session replay. */
+  noCapture?: boolean;
+  /** Pure resolver; the query is trimmed and empty when search is disabled. */
+  getAdditionalOption?: (context: {
+    query: string;
+  }) => React.ComponentProps<typeof SelectDropdown<V>>["customOption"];
+  error?: boolean;
+  muted?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
+};
+
+export function ControlledSelectInput<V extends string>(
+  props:
+    | (LocalSelectInputProps<V> & { mode?: "local" })
+    | (React.ComponentProps<typeof SearchableSelectInput<V>> & {
+        mode: "external";
+      }),
+) {
+  if (props.mode === "external") {
+    const { mode: _mode, ...externalProps } = props;
+    return <SearchableSelectInput {...externalProps} />;
+  }
+  const { mode: _mode, ...localProps } = props;
+  return <LocalSelectInput {...localProps} />;
+}
+
+function LocalSelectInput<V extends string>({
+  value,
+  options,
+  onValueChange,
+  placeholder,
+  emptyMessage,
+  noCapture,
+  getAdditionalOption,
+  search,
+  openState,
+  align,
+  dropdownWidth,
+  error,
+  muted,
+  prefix,
+  clearAction,
+  ref,
+  ...triggerProps
+}: LocalSelectInputProps<V>) {
+  const searchValue = search?.value ?? "";
+  const [selectedAdditionalOption, setSelectedAdditionalOption] =
+    React.useState<
+      NonNullable<
+        React.ComponentProps<typeof SelectDropdown<V>>["customOption"]
+      >
+    >();
+  const query = search ? searchValue.trim() : "";
+  const flatOptions = options.flatMap((node) =>
+    node.type === "group" ? node.options : [node],
+  );
+  const candidate = getAdditionalOption?.({ query });
+  const additionalOption =
+    candidate && !flatOptions.some((option) => option.value === candidate.value)
+      ? candidate
+      : undefined;
+  const trailingAction = clearAction
+    ? {
+        icon: X,
+        label: clearAction.label,
+        onClick: clearAction.onClear,
+        appearance: "inline" as const,
+      }
+    : undefined;
+
+  if (search) {
+    const selectedOption = [
+      ...flatOptions,
+      additionalOption,
+      selectedAdditionalOption,
+    ].find((option) => option?.value === value);
+    // cmdk exports this function, but types it as its optional `filter` prop.
+    const rank = (option: (typeof flatOptions)[number]) =>
+      defaultFilter!(option.value.trim(), searchValue.trim(), [
+        option.label.trim(),
+      ]);
+    const filteredOptions = searchValue.trim()
+      ? options
+          .flatMap<
+            React.ComponentProps<typeof SelectDropdown<V>>["options"][number]
+          >((node) => {
+            if (node.type === "group") {
+              const items = node.options
+                .filter((option) => rank(option) > 0)
+                .sort((a, b) => rank(b) - rank(a));
+              return items.length > 0 ? [{ ...node, options: items }] : [];
+            }
+            return rank(node) > 0 ? [node] : [];
+          })
+          .sort((a, b) => {
+            const aRank =
+              a.type === "group" ? Math.max(...a.options.map(rank)) : rank(a);
+            const bRank =
+              b.type === "group" ? Math.max(...b.options.map(rank)) : rank(b);
+            return bRank - aRank;
+          })
+      : options;
+
+    return (
+      <SearchableSelectInput
+        {...triggerProps}
+        ref={ref}
+        openState={openState}
+        noCapture={noCapture}
+        value={
+          selectedOption ??
+          (getAdditionalOption && value ? { value, label: value } : null)
+        }
+        options={
+          additionalOption
+            ? [...filteredOptions, additionalOption]
+            : filteredOptions
+        }
+        onValueChange={(option) => {
+          setSelectedAdditionalOption(
+            option.value === additionalOption?.value
+              ? additionalOption
+              : undefined,
+          );
+          onValueChange(option.value);
+        }}
+        placeholder={placeholder}
+        emptyMessage={emptyMessage}
+        align={align}
+        dropdownWidth={dropdownWidth}
+        search={search}
+        error={error}
+        muted={muted}
+        prefix={prefix}
+        trailingAction={trailingAction}
+      />
+    );
+  }
+
+  const SelectedIcon = [...flatOptions, additionalOption].find(
+    (option) => option?.value === value,
+  )?.icon;
+
+  return (
+    <SelectDropdown
+      value={value}
+      options={options}
+      onValueChange={onValueChange}
+      emptyMessage={emptyMessage}
+      noCapture={noCapture}
+      openState={openState}
+      customOption={additionalOption}
+      ref={ref}
+      {...triggerProps}
+    >
+      {({ getTriggerProps, selectedLabel }) => (
+        <InputControl
+          contentLayout="spread"
+          error={error}
+          disabled={triggerProps.disabled}
+          prefix={prefix}
+          trailingAction={trailingAction}
+        >
+          <button {...getTriggerProps()}>
+            {SelectedIcon ? (
+              // Box-centered, the icon sits above the middle of lowercase text.
+              <span className="flex shrink-0 translate-y-px" aria-hidden>
+                <SelectedIcon size="base" />
+              </span>
+            ) : null}
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-left",
+                muted && "text-muted-foreground",
+              )}
+              title={selectedLabel}
+            >
+              {selectedLabel ?? placeholder}
+            </span>
+            <DropdownIndicator color={error ? "destructive" : "tertiary"} />
+          </button>
+        </InputControl>
+      )}
+    </SelectDropdown>
+  );
+}
 
 type SelectedOption<V extends string> = Pick<
   Extract<
@@ -23,11 +234,13 @@ type SelectedOption<V extends string> = Pick<
 >;
 
 /** Search and selection are caller-owned; options are rendered without filtering. */
-export function AsyncSelectInput<V extends string>({
+function SearchableSelectInput<V extends string>({
   value,
   options,
   onValueChange,
   search,
+  openState,
+  noCapture,
   placeholder,
   loading,
   callToActionOption,
@@ -63,6 +276,8 @@ export function AsyncSelectInput<V extends string>({
     onValueChange: (value: string) => void;
   };
   loading?: { message: string };
+  openState: React.ComponentProps<typeof SelectDropdown<V>>["openState"];
+  noCapture?: boolean;
   callToActionOption?: {
     label: string;
     position: "first" | "last";
@@ -76,10 +291,10 @@ export function AsyncSelectInput<V extends string>({
   ref?: React.Ref<HTMLButtonElement>;
 }) {
   const container = useLayerContainer("popover");
-  const [open, setOpen] = React.useState(false);
+  const { open } = openState;
   const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
     if (!nextOpen) search.onValueChange("");
+    openState.onOpenChange(nextOpen);
   };
   const listId = React.useId();
   const actionId = React.useId();
@@ -213,6 +428,7 @@ export function AsyncSelectInput<V extends string>({
           width={dropdownWidth === "wide" ? "popover-wide" : "popover-trigger"}
         >
           <PopoverPrimitive.Content
+            className={noCapture ? "ph-no-capture" : undefined}
             align={align}
             sideOffset={4}
             collisionPadding={dropdownWidth === "wide" ? 8 : undefined}

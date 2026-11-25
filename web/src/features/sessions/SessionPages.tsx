@@ -37,6 +37,7 @@ import { useSession } from "next-auth/react";
 import { Download, MoreVertical, Webhook } from "@langfuse/icons";
 import { DropdownIndicator } from "@/src/components/design-system/DropdownIndicator/DropdownIndicator";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
+import { useFilterBuilderAnalytics } from "@/src/features/filters/hooks/useFilterBuilderAnalytics";
 import Page from "@/src/components/layouts/Page";
 import {
   type ColumnDefinition,
@@ -63,7 +64,7 @@ import {
   buildSidebarFilterQueryStorageKey,
   readPersistedSidebarFilterQuery,
 } from "@/src/features/filters/lib/persistedSidebarFilterQuery";
-import { PopoverFilterBuilder } from "@/src/features/filters/components/filter-builder";
+import { FilterBuilderInput } from "@/src/components/design-system/FilterBuilderInput/FilterBuilderInput";
 
 import { useTableViewManager } from "@/src/components/table/table-view-presets/hooks/useTableViewManager";
 import { useTableViewFilterChange } from "@/src/components/table/table-view-presets/hooks/useTableViewFilterChange";
@@ -1220,6 +1221,10 @@ const LoadedSessionEventsPage: React.FC<{
     [filterColumns],
   );
 
+  const onFilterAnalyticsEvent = useFilterBuilderAnalytics(
+    "session-detail",
+    false,
+  );
   const { viewControllersRef, onExplicitFilterStateChange } =
     useTableViewFilterChange();
   const hasUserFilterEditRef = useRef(false);
@@ -2048,19 +2053,22 @@ const LoadedSessionEventsPage: React.FC<{
                 trace (it does not filter the list of traces) — labelled to say
                 so (LFE-10520). */}
                           {!isModernSessionEnabled ? (
-                            <PopoverFilterBuilder
+                            <FilterBuilderInput
                               key={viewControllers.filterEditorResetKey}
-                              columns={filterColumns}
-                              filterState={visibleFilterState}
+                              columns={filterColumns.filter(
+                                (
+                                  column,
+                                ): column is React.ComponentProps<
+                                  typeof FilterBuilderInput
+                                >["columns"][number] => column.type !== "null",
+                              )}
+                              value={visibleFilterState}
                               onChange={queryFilter.setFilterState}
-                              columnsWithCustomSelect={
+                              onAnalyticsEvent={onFilterAnalyticsEvent}
+                              columnsWithCustomValues={
                                 filterColumnsWithCustomSelect
                               }
                               label="Filter observations"
-                              // Analytics (LFE-10781): session-detail observation refinement is a
-                              // v3/legacy surface (the v4 events table filters via the grammar bar).
-                              tableName="session-detail"
-                              isV4={false}
                             />
                           ) : null}
                         </SessionControlsBar>

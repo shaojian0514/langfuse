@@ -14,10 +14,8 @@ import {
   type ColumnGroupTogglePayload,
 } from "@/src/components/table/DataTableColumnVisibilityFilter";
 import { FilterToggleButton } from "@/src/components/table/FilterToggleButton";
-import {
-  InlineFilterBuilder,
-  PopoverFilterBuilder,
-} from "@/src/features/filters/components/filter-builder";
+import { ToolbarFilterBuilder } from "@/src/features/filters/components/ToolbarFilterBuilder";
+import { FilterBuilderEditor } from "@/src/components/design-system/FilterBuilderEditor/FilterBuilderEditor";
 import {
   type FilterState,
   type ColumnDefinition,
@@ -710,12 +708,11 @@ export function DataTableToolbar<TData, TValue>({
                       {mobileSearch}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                      <InlineFilterBuilder
+                      <FilterBuilderEditor
                         columns={filterColumnDefinition}
-                        filterState={filterState}
+                        initialFilters={filterState}
                         onChange={setFilterState}
-                        columnsWithCustomSelect={columnsWithCustomSelect}
-                        compact
+                        columnsWithCustomValues={columnsWithCustomSelect}
                       />
                     </div>
                   </SheetContent>
@@ -723,11 +720,11 @@ export function DataTableToolbar<TData, TValue>({
               </SearchBarDraftCacheContext.Provider>
             )}
             {(!mobileSearch || isDesktop) && (
-              <PopoverFilterBuilder
+              <ToolbarFilterBuilder
                 columns={filterColumnDefinition}
-                filterState={filterState}
+                value={filterState}
                 onChange={setFilterState}
-                columnsWithCustomSelect={columnsWithCustomSelect}
+                columnsWithCustomValues={columnsWithCustomSelect}
                 filterWithAI={filterWithAI}
                 // Analytics (LFE-10781): the table's own identity, so popover
                 // filters:applied/cleared events aren't mislabeled "unknown". Shares

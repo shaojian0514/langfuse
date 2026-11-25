@@ -22,7 +22,7 @@ import { Separator } from "@/src/components/ui/separator";
 import { Switch } from "@/src/components/design-system/Switch/Switch";
 import { useRouter } from "next/router";
 import { z } from "zod";
-import { type Control, useForm } from "react-hook-form";
+import { type Control, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Form,
@@ -49,7 +49,7 @@ import {
   PagerDutyRegionSchema,
   PagerDutyRoutingKeySchema,
 } from "@langfuse/shared/pagerduty";
-import { InlineFilterBuilder } from "@/src/features/filters/components/filter-builder";
+import { ControlledFilterBuilderEditor } from "@/src/components/design-system/ControlledFilterBuilderEditor/ControlledFilterBuilderEditor";
 import { MultiSelect } from "@/src/features/filters/components/MultiSelect";
 import { DeleteAutomationDialogController } from "./DeleteAutomationDialogController";
 import { useLangfuseCloudRegion } from "@/src/features/organizations/hooks";
@@ -271,6 +271,12 @@ const VersionTriggerFields = ({
   disabled: boolean;
 }) => {
   const [optionsOpened, setOptionsOpened] = React.useState(false);
+  const filters = useWatch({ control, name: "filter" });
+  type EditorProps = React.ComponentProps<typeof ControlledFilterBuilderEditor>;
+  const [draft, setDraft] = React.useState<EditorProps["draft"]>(() =>
+    filters?.length ? filters : [{}],
+  );
+  const [picker, setPicker] = React.useState<EditorProps["picker"]>(null);
   const isSkill = eventSource === TriggerEventSource.Skill;
   const resource = isSkill ? "skill" : "prompt";
   const { filterOptions, isFetching: optionsLoading } = useVersionFilterOptions(
@@ -280,6 +286,7 @@ const VersionTriggerFields = ({
       enabled: optionsOpened,
     },
   );
+  const columns = webhookActionFilterOptions(filterOptions);
 
   return (
     <>
@@ -328,16 +335,24 @@ const VersionTriggerFields = ({
           <FormItem>
             <FormLabel>Filter</FormLabel>
             <FormControl>
-              <InlineFilterBuilder
-                columns={webhookActionFilterOptions(filterOptions)}
-                columnsWithCustomSelect={["labels", "tags"]}
-                loadingOptionColumns={optionsLoading ? ["labels", "tags"] : []}
-                onOptionsOpen={(columnId) => {
+              <ControlledFilterBuilderEditor
+                columns={columns}
+                columnsWithCustomValues={["labels", "tags"]}
+                loadingColumnIds={optionsLoading ? ["labels", "tags"] : []}
+                draft={draft}
+                onDraftChange={setDraft}
+                picker={picker}
+                onPickerChange={(next) => {
+                  setPicker(next);
+                  if (next?.field !== "value") return;
+                  const identifier = draft[next.rowIndex]?.column;
+                  const columnId = columns.find(
+                    ({ id, name }) => id === identifier || name === identifier,
+                  )?.id;
                   if (columnId === "labels" || columnId === "tags") {
                     setOptionsOpened(true);
                   }
                 }}
-                filterState={field.value || []}
                 onChange={field.onChange}
                 disabled={disabled}
               />

@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/src/components/ui/dialog";
-import { InlineFilterBuilder } from "@/src/features/filters/components/filter-builder";
+import { FilterBuilderEditor } from "@/src/components/design-system/FilterBuilderEditor/FilterBuilderEditor";
 
 export type ModernSessionFilterDialogViewActions =
   | { type: "none" }
@@ -51,11 +51,11 @@ export function ModernSessionFilterDialogContent({
         <DialogTitle>Filter observations</DialogTitle>
       </DialogHeader>
       <DialogBody className="overflow-y-auto">
-        <InlineFilterBuilder
+        <FilterBuilderEditor
           columns={filterColumns}
-          filterState={filters}
+          initialFilters={initialFilters}
           onChange={setFilters}
-          columnsWithCustomSelect={filterColumnsWithCustomSelect}
+          columnsWithCustomValues={filterColumnsWithCustomSelect}
         />
       </DialogBody>
       <DialogFooter>
